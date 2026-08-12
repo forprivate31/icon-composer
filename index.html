@@ -212,6 +212,7 @@
     padding:0;
     cursor:pointer;
     color:var(--key);
+    touch-action:none;
   }
   .step-btn:active{ background:#33301c; border-color:var(--key); }
   .step-btn svg{ width:11px; height:11px; }
@@ -242,6 +243,7 @@
     padding:0;
     cursor:pointer;
     color:var(--cyan);
+    touch-action:none;
   }
   .dpad button:active{ background:var(--cyan-dim); border-color:var(--cyan); }
   .dpad button svg{ width:15px; height:15px; }
@@ -533,7 +535,8 @@
     render();
   }
 
-  function setupHold(btn, delta){
+  // btn を押し続けている間、onTick を繰り返し呼び出す（マウス/タッチ両対応、長押しで加速開始）
+  function setupHold(btn, onTick){
     let holdTimeout = null;
     let holdInterval = null;
     let touched = false;
@@ -542,9 +545,9 @@
       e.preventDefault();
       if(e.type === 'mousedown' && touched) return; // touch由来のmousedown重複を防ぐ
       if(e.type === 'touchstart') touched = true;
-      nudgeScale(delta); // 最初の1タップ分
+      onTick(); // 最初の1タップ分
       holdTimeout = setTimeout(() => {
-        holdInterval = setInterval(() => nudgeScale(delta), 90);
+        holdInterval = setInterval(onTick, 90);
       }, 400); // 長押し判定までの遅延
     }
     function stop(){
@@ -560,13 +563,15 @@
       btn.addEventListener(evt, stop);
     });
   }
-  setupHold(els.scaleDown, -SCALE_STEP);
-  setupHold(els.scaleUp, SCALE_STEP);
+  setupHold(els.scaleDown, () => nudgeScale(-SCALE_STEP));
+  setupHold(els.scaleUp, () => nudgeScale(SCALE_STEP));
 
   document.querySelectorAll('.dpad button[data-dx]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      state.offsetX += parseFloat(btn.dataset.dx) * STEP;
-      state.offsetY += parseFloat(btn.dataset.dy) * STEP;
+    const dx = parseFloat(btn.dataset.dx);
+    const dy = parseFloat(btn.dataset.dy);
+    setupHold(btn, () => {
+      state.offsetX += dx * STEP;
+      state.offsetY += dy * STEP;
       updatePosLabel();
       render();
     });
