@@ -340,8 +340,8 @@
       <span class="name">ベースの拡大率</span>
       <span class="val" id="scale-val">100%</span>
     </div>
-    <input type="range" id="scale" min="100" max="250" value="100">
-    <div class="control-hint">本体画像をズームして、リングの中に見える範囲を調整します。顔や被写体を大きく見せたいときに上げてください。</div>
+    <input type="range" id="scale" min="50" max="150" value="100">
+    <div class="control-hint">本体画像を拡大・縮小して、リングの中に見える範囲を調整します。100%より上げると被写体が大きく、下げると小さく（周囲は透明）表示されます。</div>
   </div>
 
   <div class="control disabled" id="control-threshold">
@@ -442,18 +442,20 @@
     img.src = url;
   }
 
-  // 中央基準で正方形に切り出す範囲を計算（object-fit: cover 相当）
-  // zoom > 1 にすると、切り出す範囲を狭めて中央を拡大表示する
-  function coverRect(w, h, zoom){
-    zoom = zoom || 1;
-    const side = Math.min(w, h) / zoom;
-    return { sx: (w - side) / 2, sy: (h - side) / 2, s: side };
-  }
-
+  // 中央基準で正方形にフィットさせる（object-fit: cover 相当）。
+  // zoom で拡大縮小してから中央に配置する。zoom<1 の場合は周囲が余白（透明）になる。
   function drawCover(ctx, img, outSize, zoom){
-    const { sx, sy, s } = coverRect(img.naturalWidth, img.naturalHeight, zoom);
-    ctx.clearRect(0,0,outSize,outSize);
-    ctx.drawImage(img, sx, sy, s, s, 0, 0, outSize, outSize);
+    zoom = zoom || 1;
+    const side = Math.min(img.naturalWidth, img.naturalHeight);
+    const sx = (img.naturalWidth - side) / 2;
+    const sy = (img.naturalHeight - side) / 2;
+
+    const destSize = outSize * zoom;
+    const dx = (outSize - destSize) / 2;
+    const dy = (outSize - destSize) / 2;
+
+    ctx.clearRect(0, 0, outSize, outSize);
+    ctx.drawImage(img, sx, sy, side, side, dx, dy, destSize, destSize);
   }
 
   function render(){
