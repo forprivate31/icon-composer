@@ -513,7 +513,7 @@
     render();
   });
 
-  const SCALE_STEP = 5;
+  const SCALE_STEP = 1;
   function nudgeScale(delta){
     const min = parseInt(els.scale.min, 10);
     const max = parseInt(els.scale.max, 10);
@@ -523,8 +523,36 @@
     els.scaleVal.textContent = v + '%';
     render();
   }
-  els.scaleDown.addEventListener('click', () => nudgeScale(-SCALE_STEP));
-  els.scaleUp.addEventListener('click', () => nudgeScale(SCALE_STEP));
+
+  function setupHold(btn, delta){
+    let holdTimeout = null;
+    let holdInterval = null;
+    let touched = false;
+
+    function start(e){
+      e.preventDefault();
+      if(e.type === 'mousedown' && touched) return; // touch由来のmousedown重複を防ぐ
+      if(e.type === 'touchstart') touched = true;
+      nudgeScale(delta); // 最初の1タップ分
+      holdTimeout = setTimeout(() => {
+        holdInterval = setInterval(() => nudgeScale(delta), 90);
+      }, 400); // 長押し判定までの遅延
+    }
+    function stop(){
+      clearTimeout(holdTimeout);
+      clearInterval(holdInterval);
+      holdTimeout = null;
+      holdInterval = null;
+    }
+
+    btn.addEventListener('mousedown', start);
+    btn.addEventListener('touchstart', start, { passive:false });
+    ['mouseup','mouseleave','touchend','touchcancel'].forEach(evt => {
+      btn.addEventListener(evt, stop);
+    });
+  }
+  setupHold(els.scaleDown, -SCALE_STEP);
+  setupHold(els.scaleUp, SCALE_STEP);
 
   document.querySelectorAll('.dpad button[data-dx]').forEach(btn => {
     btn.addEventListener('click', () => {
