@@ -337,6 +337,15 @@
 
   <div class="control disabled" id="control">
     <div class="control-head">
+      <span class="name">ベースの拡大率</span>
+      <span class="val" id="scale-val">100%</span>
+    </div>
+    <input type="range" id="scale" min="100" max="250" value="100">
+    <div class="control-hint">本体画像をズームして、リングの中に見える範囲を調整します。顔や被写体を大きく見せたいときに上げてください。</div>
+  </div>
+
+  <div class="control disabled" id="control-threshold">
+    <div class="control-head">
       <span class="name">白の透過強度</span>
       <span class="val" id="threshold-val">50</span>
     </div>
@@ -388,6 +397,9 @@
     thumbBase: document.getElementById('thumb-base'),
     thumbRing: document.getElementById('thumb-ring'),
     control: document.getElementById('control'),
+    controlThreshold: document.getElementById('control-threshold'),
+    scale: document.getElementById('scale'),
+    scaleVal: document.getElementById('scale-val'),
     threshold: document.getElementById('threshold'),
     thresholdVal: document.getElementById('threshold-val'),
     stage: document.getElementById('stage'),
@@ -405,6 +417,10 @@
   els.fileRing.addEventListener('change', e => handleFile(e, 'ring'));
   els.threshold.addEventListener('input', () => {
     els.thresholdVal.textContent = els.threshold.value;
+    render();
+  });
+  els.scale.addEventListener('input', () => {
+    els.scaleVal.textContent = els.scale.value + '%';
     render();
   });
 
@@ -427,13 +443,15 @@
   }
 
   // 中央基準で正方形に切り出す範囲を計算（object-fit: cover 相当）
-  function coverRect(w, h){
-    const side = Math.min(w, h);
+  // zoom > 1 にすると、切り出す範囲を狭めて中央を拡大表示する
+  function coverRect(w, h, zoom){
+    zoom = zoom || 1;
+    const side = Math.min(w, h) / zoom;
     return { sx: (w - side) / 2, sy: (h - side) / 2, s: side };
   }
 
-  function drawCover(ctx, img, outSize){
-    const { sx, sy, s } = coverRect(img.naturalWidth, img.naturalHeight);
+  function drawCover(ctx, img, outSize, zoom){
+    const { sx, sy, s } = coverRect(img.naturalWidth, img.naturalHeight, zoom);
     ctx.clearRect(0,0,outSize,outSize);
     ctx.drawImage(img, sx, sy, s, s, 0, 0, outSize, outSize);
   }
@@ -442,6 +460,7 @@
     if(!state.base || !state.ring) return;
 
     els.control.classList.remove('disabled');
+    els.controlThreshold.classList.remove('disabled');
     els.stage.innerHTML = '<div class="spinner"></div>';
 
     // 少し遅延させて描画（大きな写真でもスピナーが見えるように）
@@ -461,8 +480,9 @@
       const ctxRing = els.canvasRing.getContext('2d');
       const ctxOut = els.canvasOut.getContext('2d');
 
-      drawCover(ctxBase, base, outSize);
-      drawCover(ctxRing, ring, outSize);
+      const baseZoom = parseInt(els.scale.value, 10) / 100;
+      drawCover(ctxBase, base, outSize, baseZoom);
+      drawCover(ctxRing, ring, outSize, 1);
 
       // リング画像：白に近いピクセルを透明化（フェザリング付き）
       const t = parseInt(els.threshold.value, 10); // 0-100
