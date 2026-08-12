@@ -188,6 +188,51 @@
   }
   .control-hint{ font-size:10.5px; color:var(--ink-dim); margin-top:8px; line-height:1.6; }
 
+  /* ---------- Position D-pad ---------- */
+  .dpad-row{
+    display:flex;
+    align-items:center;
+    gap:18px;
+    margin-top:14px;
+  }
+  .dpad{
+    display:grid;
+    grid-template-columns: 38px 38px 38px;
+    grid-template-rows: 38px 38px 38px;
+    gap:4px;
+    flex-shrink:0;
+  }
+  .dpad button{
+    -webkit-appearance:none;
+    border:1px solid var(--panel-line);
+    background:#20222a;
+    border-radius:8px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:0;
+    cursor:pointer;
+    color:var(--cyan);
+  }
+  .dpad button:active{ background:var(--cyan-dim); border-color:var(--cyan); }
+  .dpad button svg{ width:15px; height:15px; }
+  .dpad .cell-up{ grid-column:2; grid-row:1; }
+  .dpad .cell-left{ grid-column:1; grid-row:2; }
+  .dpad .cell-reset{ grid-column:2; grid-row:2; color:var(--ink-dim); }
+  .dpad .cell-right{ grid-column:3; grid-row:2; }
+  .dpad .cell-down{ grid-column:2; grid-row:3; }
+  .dpad .cell-reset svg{ width:12px; height:12px; }
+
+  .dpad-info{ flex:1; }
+  .dpad-info .name{ font-size:12.5px; font-weight:500; margin-bottom:6px; }
+  .dpad-info .val{
+    font-family: var(--font-mono);
+    font-size:12px;
+    color:var(--key);
+    margin-bottom:6px;
+  }
+  .dpad-info .hint{ font-size:10.5px; color:var(--ink-dim); line-height:1.6; }
+
   /* ---------- Light table preview ---------- */
   .table-wrap{
     position:relative;
@@ -341,6 +386,31 @@
     </div>
     <input type="range" id="scale" min="50" max="150" value="100">
     <div class="control-hint">本体画像を拡大・縮小して、リングの中に見える範囲を調整します。100%より上げると被写体が大きく、下げると小さく（周囲は透明）表示されます。</div>
+
+    <div class="dpad-row">
+      <div class="dpad">
+        <button class="cell-up" data-dx="0" data-dy="-1" aria-label="上に移動">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 5l7 8H5l7-8z" fill="currentColor"/></svg>
+        </button>
+        <button class="cell-left" data-dx="-1" data-dy="0" aria-label="左に移動">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M5 12l8-7v14l-8-7z" fill="currentColor"/></svg>
+        </button>
+        <button class="cell-reset" id="pos-reset" aria-label="位置をリセット">
+          <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 7v10M7 12h10" stroke="currentColor" stroke-width="1.6"/></svg>
+        </button>
+        <button class="cell-right" data-dx="1" data-dy="0" aria-label="右に移動">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M19 12l-8 7V5l8 7z" fill="currentColor"/></svg>
+        </button>
+        <button class="cell-down" data-dx="0" data-dy="1" aria-label="下に移動">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 19l-7-8h14l-7 8z" fill="currentColor"/></svg>
+        </button>
+      </div>
+      <div class="dpad-info">
+        <div class="name">ベースの位置</div>
+        <div class="val" id="pos-val">X: 0% / Y: 0%</div>
+        <div class="hint">矢印で本体画像の位置を微調整できます。中央のボタンでリセットします。</div>
+      </div>
+    </div>
   </div>
 
   <div class="table-wrap">
@@ -377,7 +447,8 @@
 (function(){
   const MAX_DIM = 2048; // 出力の上限（画質と処理速度のバランス）
 
-  const state = { base: null, ring: null };
+  const state = { base: null, ring: null, offsetX: 0, offsetY: 0 }; // offset は outSize に対する割合（-0.5〜0.5想定）
+  const STEP = 0.02; // 矢印1回あたりの移動量（キャンバスサイズに対する割合）
 
   const els = {
     slotBase: document.getElementById('slot-base'),
@@ -389,6 +460,8 @@
     control: document.getElementById('control'),
     scale: document.getElementById('scale'),
     scaleVal: document.getElementById('scale-val'),
+    posVal: document.getElementById('pos-val'),
+    posReset: document.getElementById('pos-reset'),
     stage: document.getElementById('stage'),
     dimLabel: document.getElementById('dim-label'),
     resultArea: document.getElementById('result-area'),
@@ -407,6 +480,25 @@
     render();
   });
 
+  document.querySelectorAll('.dpad button[data-dx]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.offsetX += parseFloat(btn.dataset.dx) * STEP;
+      state.offsetY += parseFloat(btn.dataset.dy) * STEP;
+      updatePosLabel();
+      render();
+    });
+  });
+  els.posReset.addEventListener('click', () => {
+    state.offsetX = 0;
+    state.offsetY = 0;
+    updatePosLabel();
+    render();
+  });
+
+  function updatePosLabel(){
+    els.posVal.textContent = 'X: ' + Math.round(state.offsetX * 100) + '% / Y: ' + Math.round(state.offsetY * 100) + '%';
+  }
+
   function handleFile(e, role){
     const file = e.target.files && e.target.files[0];
     if(!file) return;
@@ -414,6 +506,13 @@
     const url = URL.createObjectURL(file);
     img.onload = () => {
       state[role] = img;
+      if(role === 'base'){
+        state.offsetX = 0;
+        state.offsetY = 0;
+        els.scale.value = 100;
+        els.scaleVal.textContent = '100%';
+        updatePosLabel();
+      }
       const thumb = role === 'base' ? els.thumbBase : els.thumbRing;
       thumb.innerHTML = '';
       const tImg = document.createElement('img');
@@ -427,15 +526,18 @@
 
   // 中央基準で正方形にフィットさせる（object-fit: cover 相当）。
   // zoom で拡大縮小してから中央に配置する。zoom<1 の場合は周囲が余白（透明）になる。
-  function drawCover(ctx, img, outSize, zoom){
+  // offsetX/offsetY は outSize に対する割合で、配置位置をずらす。
+  function drawCover(ctx, img, outSize, zoom, offsetX, offsetY){
     zoom = zoom || 1;
+    offsetX = offsetX || 0;
+    offsetY = offsetY || 0;
     const side = Math.min(img.naturalWidth, img.naturalHeight);
     const sx = (img.naturalWidth - side) / 2;
     const sy = (img.naturalHeight - side) / 2;
 
     const destSize = outSize * zoom;
-    const dx = (outSize - destSize) / 2;
-    const dy = (outSize - destSize) / 2;
+    const dx = (outSize - destSize) / 2 + offsetX * outSize;
+    const dy = (outSize - destSize) / 2 + offsetY * outSize;
 
     ctx.clearRect(0, 0, outSize, outSize);
     ctx.drawImage(img, sx, sy, side, side, dx, dy, destSize, destSize);
@@ -465,8 +567,8 @@
       const ctxOut = els.canvasOut.getContext('2d');
 
       const baseZoom = parseInt(els.scale.value, 10) / 100;
-      drawCover(ctxBase, base, outSize, baseZoom);
-      drawCover(ctxRing, ring, outSize, 1);
+      drawCover(ctxBase, base, outSize, baseZoom, state.offsetX, state.offsetY);
+      drawCover(ctxRing, ring, outSize, 1, 0, 0);
 
       // 合成：本体 → リング（リング画像はアップロード時点で透過設定済みの前提）
       ctxOut.clearRect(0,0,outSize,outSize);
